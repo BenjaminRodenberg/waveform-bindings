@@ -11,7 +11,7 @@ import tests.MockedPrecice
 fake_dolfin = MagicMock()
 
 
-@patch.dict('sys.modules', **{'precice': tests.MockedPrecice})
+@patch.dict('sys.modules', **{'precice_future': tests.MockedPrecice})
 class TestWaveformBindings(TestCase):
 
     dt = 1
@@ -26,26 +26,14 @@ class TestWaveformBindings(TestCase):
     def test_import(self):
         pass
 
-    def test_init_fail(self):
-        from waveformbindings import WaveformBindings
-        try:
-            WaveformBindings()  # -> should throw a TypeError
-            self.assertTrue(False)
-        except Exception as e:
-            self.assertEqual(type(e), TypeError)
-
     def test_init(self):
-        with patch("precice.Interface") as tests.MockedPrecice.Interface:
+        with patch("precice_future.Interface") as tests.MockedPrecice.Interface:
             from waveformbindings import WaveformBindings
             WaveformBindings("Dummy", 0, 1)
 
     def test_read(self):
         from waveformbindings import WaveformBindings
-        from precice import Interface
-
-        def read_behavior(read_data_id, n_vertices, vertex_ids, read_data):
-            assert (type(read_data) == np.ndarray)
-            read_data += 1
+        from precice_future import Interface
 
         Interface.get_data_id = MagicMock()
         dummy_mesh_id = MagicMock()
@@ -60,24 +48,24 @@ class TestWaveformBindings(TestCase):
         bindings.initialize_waveforms(dummy_mesh_id, self.n_vertices, dummy_vertex_ids, "Dummy-Write", "Dummy-Read", 1, 1)
         bindings._read_data_buffer.append(to_be_read, 0)
         bindings._read_data_buffer.append(to_be_read, 1)
+        Interface.read_block_scalar_data = MagicMock(return_value=to_be_read)
         bindings.read_block_scalar_data("Dummy-Read", dummy_mesh_id, self.n_vertices, dummy_vertex_ids, read_data, 0)
         self.assertTrue(np.isclose(read_data, to_be_read).all())
 
     def test_write(self):
         from waveformbindings import WaveformBindings
-        from precice import Interface
+        from precice_future import Interface
 
         Interface.get_data_id = MagicMock()
         Interface.write_block_scalar_data = MagicMock()
         bindings = WaveformBindings("Dummy", 0, 1)
-        bindings.configure_waveform_relaxation(1, 10)
+        bindings.configure_waveform_relaxation(10, 1)
         bindings._precice_tau = self.dt
         dummy_mesh_id = MagicMock()
         dummy_vertex_ids = np.random.rand(10)
         old_data = np.random.rand(self.n_vertices)
         to_be_written = old_data + np.random.rand(self.n_vertices)
         write_data = to_be_written
-        read_data = np.random.rand(self.n_vertices)
         bindings.initialize_waveforms(dummy_mesh_id, self.n_vertices, dummy_vertex_ids, "Dummy-Write", "Dummy-Read", 1, 1)
         bindings._write_data_buffer.append(old_data, 0)
         bindings._write_data_buffer.append(old_data, 1)
@@ -88,11 +76,11 @@ class TestWaveformBindings(TestCase):
 
     def test_do_some_steps(self):
         from waveformbindings import WaveformBindings
-        from precice import Interface, action_read_iteration_checkpoint, action_write_iteration_checkpoint
+        from precice_future import Interface, action_read_iteration_checkpoint, action_write_iteration_checkpoint
 
         Interface.advance = MagicMock()
         Interface.get_data_id = MagicMock()
-        Interface.read_block_scalar_data = MagicMock()
+        Interface.read_block_scalar_data = MagicMock(return_value=np.zeros(self.n_vertices))
         Interface.write_block_scalar_data = MagicMock()
         bindings = WaveformBindings("Dummy", 0, 1)
         bindings.read_slope = 0

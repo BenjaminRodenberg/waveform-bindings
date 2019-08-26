@@ -5,8 +5,8 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 try:
-    import precice
-    from precice import action_read_iteration_checkpoint, action_write_initial_data, action_write_iteration_checkpoint
+    import precice_future
+    from precice_future import action_read_iteration_checkpoint, action_write_initial_data, action_write_iteration_checkpoint
 except ImportError:
     import os
     import sys
@@ -17,11 +17,11 @@ except ImportError:
     precice_root = os.getenv('PRECICE_ROOT')
     precice_python_adapter_root = precice_root+"/src/precice/bindings/python"
     sys.path.insert(0, precice_python_adapter_root)
-    import precice
-    from precice import action_read_iteration_checkpoint, action_write_initial_data, action_write_iteration_checkpoint
+    import precice_future
+    from precice_future import action_read_iteration_checkpoint, action_write_initial_data, action_write_iteration_checkpoint
 
 
-class WaveformBindings(precice.Interface):
+class WaveformBindings(precice_future.Interface):
 
     def configure_waveform_relaxation(self, n_this, n_other):
         self._sample_counter_this = 0
@@ -103,9 +103,9 @@ class WaveformBindings(precice.Interface):
             substep_time = write_waveform._temporal_grid[substep]
             write_data = write_waveform._samples_in_time[:, substep]
             if self._write_data_dimension == 1:
-                super().write_block_scalar_data(write_data_id, self._n_vertices, self._vertex_ids, write_data)
+                super().write_block_scalar_data(write_data_id, self._vertex_ids, write_data)
             elif self._write_data_dimension == self.get_dimensions():
-                super().write_block_vector_data(write_data_id, self._n_vertices, self._vertex_ids, write_data)
+                super().write_block_vector_data(write_data_id, self._vertex_ids, write_data)
             logging.debug("write data called {name}:{write_data} @ time = {time}".format(name=write_data_name,
                                                                                          write_data=write_data,
                                                                                          time=substep_time))
@@ -117,19 +117,17 @@ class WaveformBindings(precice.Interface):
         logging.debug("Calling _read_all_window_data_from_precice")
         read_data_name_prefix = self._read_data_name
         read_waveform = self._read_data_buffer
-        read_ndarray = read_waveform.get_empty_ndarray()
         read_waveform.empty_data(keep_first_sample=True)
         read_times = np.linspace(self._current_window_start, self._current_window_end(), self._n_other + 1)  # todo THIS IS HARDCODED! FOR ADAPTIVE GRIDS THIS IS NOT FITTING.
 
         for substep in range(1, self._n_other + 1):
             read_data_name = read_data_name_prefix + str(substep)
             read_data_id = self.get_data_id(read_data_name, self._mesh_id)
-            read_data = np.copy(read_ndarray)
             substep_time = read_times[substep]
             if self._read_data_dimension == 1:
-                super().read_block_scalar_data(read_data_id, self._n_vertices, self._vertex_ids, read_data)
+                read_data = super().read_block_scalar_data(read_data_id, self._vertex_ids)
             elif self._read_data_dimension == self.get_dimensions():
-                super().read_block_vector_data(read_data_id, self._n_vertices, self._vertex_ids, read_data)
+                read_data = super().read_block_vector_data(read_data_id, self._vertex_ids)
             logging.debug("reading at time {time}".format(time=substep_time))
             logging.debug("read_data called {name}:{read_data} @ time = {time}".format(name=read_data_name,
                                                                                        read_data=read_data,
@@ -146,7 +144,7 @@ class WaveformBindings(precice.Interface):
             logging.debug(self._write_data_name)
             self._write_data_buffer.print_waveform()
             self._write_all_window_data_to_precice()
-            logging.debug("calling precice.advance")
+            logging.debug("calling precice_future.advance")
             read_data_last = self._read_data_buffer.sample(self._current_window_end()).copy()  # store last read data before advance, otherwise it might be lost if window is finished
             write_data_last = self._write_data_buffer.sample(self._current_window_end()).copy()  # store last write data before advance, otherwise it might be lost if window is finished
             max_dt = super().advance(self._window_time)  # = time given by preCICE
@@ -224,13 +222,13 @@ class WaveformBindings(precice.Interface):
         return np.max([self._precice_tau, self._remaining_window_time()])
 
     def writing_checkpoint_is_required(self):
-        return self._is_action_required(precice.action_write_iteration_checkpoint())
+        return self._is_action_required(action_write_iteration_checkpoint())
 
     def reading_checkpoint_is_required(self):
-        return self._is_action_required(precice.action_read_iteration_checkpoint())
+        return self._is_action_required(action_read_iteration_checkpoint())
 
     def writing_initial_data_is_required(self):
-        return self._is_action_required(precice.action_write_initial_data())
+        return self._is_action_required(action_write_initial_data())
 
     def is_action_required(self, action):
         raise Exception("Don't use is_action_required({action}). Use the corresponding function call "
@@ -238,17 +236,17 @@ class WaveformBindings(precice.Interface):
                         "writing_initial_data_is_required() instead.".format(action=action))
 
     def _is_action_required(self, action):
-        if action == precice.action_write_initial_data():
+        if action == action_write_initial_data():
             return True  # if we use waveform relaxation, we require initial data for both participants to be able to fill the write buffers correctly
-        elif action == precice.action_write_iteration_checkpoint() or action == precice.action_read_iteration_checkpoint():
+        elif action == action_write_iteration_checkpoint() or action == action_read_iteration_checkpoint():
             return super().is_action_required(action)
         else:
             raise Exception("unexpected action. %s", str(action))
 
     def fulfilled_action(self, action):
-        if action == precice.action_write_initial_data():
+        if action == action_write_initial_data():
             return None  # do not forward to precice. We have to check for this condition again in initialize_data
-        elif action == precice.action_write_iteration_checkpoint() or action == precice.action_read_iteration_checkpoint():
+        elif action == action_write_iteration_checkpoint() or action == action_read_iteration_checkpoint():
             return super().fulfilled_action(action)  # forward to precice
         else:
             raise Exception("unexpected action. %s", str(action))
@@ -269,7 +267,7 @@ class WaveformBindings(precice.Interface):
                 self._write_data_buffer.append(write_zero, time)
             self._write_all_window_data_to_precice()
             self._rollback_write_data_buffer()
-            super().fulfilled_action(precice.action_write_initial_data())
+            super().fulfilled_action(action_write_initial_data())
 
         return_value = super().initialize_data()
 

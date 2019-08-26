@@ -11,7 +11,7 @@ class Interface:
     def __init__(self, name, rank, procs):
         pass
 
-    def read_block_scalar_data(self, read_data_id, n_vertices, vertex_ids, read_data):
+    def read_block_scalar_data(self, read_data_id, n_vertices, vertex_ids):
         raise Exception("not implemented")
 
     def write_block_scalar_data(self, write_data_id, n_vertices, vertex_ids, write_data):

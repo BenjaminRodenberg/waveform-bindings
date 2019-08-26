@@ -12,7 +12,7 @@ import tests.MockedPrecice
 fake_dolfin = MagicMock()
 
 
-@patch.dict('sys.modules', **{'precice': tests.MockedPrecice})
+@patch.dict('sys.modules', **{'precice_future': tests.MockedPrecice})
 class TestWaveform(TestCase):
     def setUp(self):
         warnings.simplefilter('ignore', category=ImportWarning)
