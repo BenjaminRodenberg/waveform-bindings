@@ -50,7 +50,7 @@ class WaveformBindings(precice_future.Interface):
         logging.debug("Creating read_data_buffer: data_dimension = {}".format(self._read_data_dimension))
         self._read_data_buffer = Waveform(self._current_window_start, self._precice_tau, self._n_vertices, self._read_data_dimension)
 
-    def perform_write_checks_and_append(self, write_data_name, mesh_id, n_vertices, vertex_ids, write_data, time):
+    def perform_write_checks_and_append(self, write_data_name, mesh_id, vertex_ids, write_data, time):
         assert(self._is_inside_current_window(time))
         # we put the data into a buffer. Data will be send to other participant via preCICE in advance
         logging.debug("write data name is {write_data_name}".format(write_data_name=write_data_name))
@@ -58,19 +58,18 @@ class WaveformBindings(precice_future.Interface):
         self._write_data_buffer.append(write_data[:], time)
         # we assert that the preCICE specific write parameters did not change since configure_waveform_relaxation
         assert (self._mesh_id == mesh_id)
-        assert (self._n_vertices == n_vertices)
         assert ((self._vertex_ids == vertex_ids).all())
         assert (self._write_data_name == write_data_name)
 
-    def write_block_scalar_data(self, write_data_name, mesh_id, n_vertices, vertex_ids, write_data, time):
+    def write_block_scalar_data(self, write_data_name, mesh_id, vertex_ids, write_data, time):
         logging.debug("calling write_block_scalar_data for time {time}".format(time=time))
-        self.perform_write_checks_and_append(write_data_name, mesh_id, n_vertices, vertex_ids, write_data, time)
+        self.perform_write_checks_and_append(write_data_name, mesh_id, vertex_ids, write_data, time)
 
-    def write_block_vector_data(self, write_data_name, mesh_id, n_vertices, vertex_ids, write_data, time):
+    def write_block_vector_data(self, write_data_name, mesh_id, vertex_ids, write_data, time):
         logging.debug("calling write_block_vector_data for time {time}".format(time=time))
-        self.perform_write_checks_and_append(write_data_name, mesh_id, n_vertices, vertex_ids, write_data, time)
+        self.perform_write_checks_and_append(write_data_name, mesh_id, vertex_ids, write_data, time)
 
-    def perform_read_checks_and_sample(self, read_data_name, mesh_id, n_vertices, vertex_ids, time):
+    def perform_read_checks_and_sample(self, read_data_name, mesh_id, vertex_ids, time):
         assert (self._is_inside_current_window(time))
         # we get the data from the interpolant. New data will be obtained from the other participant via preCICE in advance
         logging.debug("read at time {time}".format(time=time))
@@ -78,18 +77,17 @@ class WaveformBindings(precice_future.Interface):
         logging.debug("read_data is {read_data}".format(read_data=read_data))
         # we assert that the preCICE specific write parameters did not change since configure_waveform_relaxation
         assert (self._mesh_id == mesh_id)
-        assert (self._n_vertices == n_vertices)
         assert ((self._vertex_ids == vertex_ids).all())
         assert (self._read_data_name == read_data_name)
         return read_data
 
-    def read_block_scalar_data(self, read_data_name, mesh_id, n_vertices, vertex_ids, read_data, time):
+    def read_block_scalar_data(self, read_data_name, mesh_id, vertex_ids, time):
         logging.debug("calling read_block_scalar_data for time {time}".format(time=time))
-        read_data[:] = self.perform_read_checks_and_sample(read_data_name, mesh_id, n_vertices, vertex_ids, time)
+        return self.perform_read_checks_and_sample(read_data_name, mesh_id, vertex_ids, time)
 
-    def read_block_vector_data(self, read_data_name, mesh_id, n_vertices, vertex_ids, read_data, time):
+    def read_block_vector_data(self, read_data_name, mesh_id, vertex_ids, time):
         logging.debug("calling read_block_vector_data for time {time}".format(time=time))
-        read_data[:] = self.perform_read_checks_and_sample(read_data_name, mesh_id, n_vertices, vertex_ids, time)
+        return self.perform_read_checks_and_sample(read_data_name, mesh_id, vertex_ids, time)
 
     def _write_all_window_data_to_precice(self):
         logging.debug("Calling _write_all_window_data_to_precice")

@@ -49,7 +49,7 @@ class TestWaveformBindings(TestCase):
         bindings._read_data_buffer.append(to_be_read, 0)
         bindings._read_data_buffer.append(to_be_read, 1)
         Interface.read_block_scalar_data = MagicMock(return_value=to_be_read)
-        bindings.read_block_scalar_data("Dummy-Read", dummy_mesh_id, self.n_vertices, dummy_vertex_ids, read_data, 0)
+        read_data = bindings.read_block_scalar_data("Dummy-Read", dummy_mesh_id, dummy_vertex_ids, 0)
         self.assertTrue(np.isclose(read_data, to_be_read).all())
 
     def test_write(self):
@@ -70,8 +70,8 @@ class TestWaveformBindings(TestCase):
         bindings._write_data_buffer.append(old_data, 0)
         bindings._write_data_buffer.append(old_data, 1)
         bindings._write_data_buffer.empty_data()
-        bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, self.n_vertices, dummy_vertex_ids, write_data, 0)
-        bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, self.n_vertices, dummy_vertex_ids, write_data, 1)
+        bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, write_data, 0)
+        bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, write_data, 1)
         self.assertTrue(np.isclose(to_be_written, bindings._write_data_buffer.sample(0)).all())
 
     def test_do_some_steps(self):
@@ -98,11 +98,11 @@ class TestWaveformBindings(TestCase):
         self.assertEqual(bindings._current_window_start, 0.0)
         for i in range(9):
             self.assertTrue(np.isclose(bindings._window_time, i * .1))
-            bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, self.n_vertices, dummy_vertex_ids, (i + 1) * np.ones(self.n_vertices), bindings._window_time + .1)
+            bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, (i + 1) * np.ones(self.n_vertices), bindings._window_time + .1)
             bindings.advance(.1)
             self.assertTrue(np.isclose(bindings._window_time, (i+1) * .1))
             self.assertTrue(np.isclose(bindings._current_window_start, 0.0))
-        bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, self.n_vertices, dummy_vertex_ids, (i + 1) * np.ones(self.n_vertices), bindings._window_time + .1)
+        bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, (i + 1) * np.ones(self.n_vertices), bindings._window_time + .1)
         bindings.advance(.1)
         self.assertTrue(np.isclose(bindings._current_window_start, 1.0))
 
@@ -115,10 +115,10 @@ class TestWaveformBindings(TestCase):
 
         for i in range(9):
             self.assertTrue(np.isclose(bindings._window_time, i * .1))
-            bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, self.n_vertices, dummy_vertex_ids, np.random.rand(self.n_vertices), bindings._current_window_start + bindings._window_time + .1)
+            bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, np.random.rand(self.n_vertices), bindings._current_window_start + bindings._window_time + .1)
             bindings.advance(.1)
             self.assertTrue(np.isclose(bindings._window_time, (i+1) * .1))
             self.assertTrue(np.isclose(bindings._current_window_start, 1.0))
-        bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, self.n_vertices, dummy_vertex_ids, (i + 1) * np.ones(self.n_vertices), bindings._current_window_start + bindings._window_time + .1)
+        bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, (i + 1) * np.ones(self.n_vertices), bindings._current_window_start + bindings._window_time + .1)
         bindings.advance(.1)
         self.assertTrue(np.isclose(bindings._current_window_start, 1.0))
