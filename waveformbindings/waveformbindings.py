@@ -1,7 +1,7 @@
 import numpy as np
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARNING)
 
 
 try:
@@ -23,7 +23,7 @@ except ImportError:
 
 class WaveformBindings(precice_future.Interface):
 
-    def configure_waveform_relaxation(self, n_this, n_other):
+    def configure_waveform_relaxation(self, n_this, n_other, interpolation_strategy='linear'):
         self._sample_counter_this = 0
         self._sample_counter_other = 0
         self._precice_tau = None
@@ -32,6 +32,7 @@ class WaveformBindings(precice_future.Interface):
         # multirate time stepping
         self._current_window_start = 0  # defines start of window
         self._window_time = self._current_window_start  # keeps track of window time
+        self._interpolation_strategy = interpolation_strategy
 
     def initialize_waveforms(self, mesh_id, n_vertices, vertex_ids, write_data_name, read_data_name, write_data_dimension, read_data_dimension):
         logging.debug("Calling initialize_waveforms")
@@ -43,12 +44,12 @@ class WaveformBindings(precice_future.Interface):
         self._write_data_name = write_data_name
         self._write_data_dimension = write_data_dimension
         logging.debug("Creating write_data_buffer: data_dimension = {}".format(self._write_data_dimension))
-        self._write_data_buffer = Waveform(self._current_window_start, self._precice_tau, self._n_vertices, self._write_data_dimension)
+        self._write_data_buffer = Waveform(self._current_window_start, self._precice_tau, self._n_vertices, self._write_data_dimension, interpolation_strategy=self._interpolation_strategy)
 
         self._read_data_name = read_data_name
         self._read_data_dimension = read_data_dimension
         logging.debug("Creating read_data_buffer: data_dimension = {}".format(self._read_data_dimension))
-        self._read_data_buffer = Waveform(self._current_window_start, self._precice_tau, self._n_vertices, self._read_data_dimension)
+        self._read_data_buffer = Waveform(self._current_window_start, self._precice_tau, self._n_vertices, self._read_data_dimension, interpolation_strategy=self._interpolation_strategy)
 
     def perform_write_checks_and_append(self, write_data_name, mesh_id, vertex_ids, write_data, time):
         assert(self._is_inside_current_window(time))
@@ -166,12 +167,12 @@ class WaveformBindings(precice_future.Interface):
                 self._window_time = 0
                 # initialize window start of new window with data from window end of old window
                 logging.debug("create new write data buffer")
-                self._write_data_buffer = Waveform(self._current_window_start, self._precice_tau, self._n_vertices, self._write_data_dimension)
+                self._write_data_buffer = Waveform(self._current_window_start, self._precice_tau, self._n_vertices, self._write_data_dimension, interpolation_strategy=self._interpolation_strategy)
                 self._write_data_buffer.append(write_data_init, self._current_window_start)
                 # use constant extrapolation as initial guess for read data
                 logging.debug("create new read data buffer with initial guess")
                 self._read_data_buffer = Waveform(self._current_window_start, self._precice_tau, self._n_vertices,
-                                                  self._read_data_dimension)
+                                                  self._read_data_dimension, interpolation_strategy=self._interpolation_strategy)
                 self._read_data_buffer.append(read_data_init,
                                               self._current_window_start)
                 self._read_all_window_data_from_precice()  # this read buffer will be overwritten anyway. todo: initial guess is currently not treated properly!
@@ -299,7 +300,7 @@ class NoDataError(Exception):
 
 
 class Waveform:
-    def __init__(self, window_start, window_size, n_datapoints, dimension):
+    def __init__(self, window_start, window_size, n_datapoints, dimension, interpolation_strategy='linear'):
         """
         :param window_start: starting time of the window
         :param window_size: size of window
@@ -314,6 +315,7 @@ class Waveform:
         self._data_dimension = dimension
         self._samples_in_time = None
         self._temporal_grid = None
+        self._interpolation_strategy = interpolation_strategy
         self.empty_data()
 
     def _window_end(self):
@@ -357,8 +359,9 @@ class Waveform:
             values_along_time = dict()
             for j in range(len(self._temporal_grid)):
                 t = self._temporal_grid[j]
+                #values_along_time[t] = self._samples_in_time[i, len(self._temporal_grid)-1]  # this line results in constant extrapolation = plain subcycling.
                 values_along_time[t] = self._samples_in_time[i, j]
-            interpolant = interp1d(list(values_along_time.keys()), list(values_along_time.values()))
+            interpolant = interp1d(list(values_along_time.keys()), list(values_along_time.values()), kind=self._interpolation_strategy)
             try:
                 return_value[i] = interpolant(time)
             except ValueError:
