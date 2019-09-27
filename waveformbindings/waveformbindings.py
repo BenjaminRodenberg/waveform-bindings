@@ -340,7 +340,7 @@ class Waveform:
         self._append_sample(data, self._window_end())
 
     def sample(self, time):
-        from scipy.interpolate import interp1d
+        from scipy.interpolate import interp1d, splrep, splev
         logging.debug("sample Waveform at %f" % time)
 
         if not self._temporal_grid:
@@ -361,7 +361,11 @@ class Waveform:
                 t = self._temporal_grid[j]
                 #values_along_time[t] = self._samples_in_time[i, len(self._temporal_grid)-1]  # this line results in constant extrapolation = plain subcycling.
                 values_along_time[t] = self._samples_in_time[i, j]
-            interpolant = interp1d(list(values_along_time.keys()), list(values_along_time.values()), kind=self._interpolation_strategy)
+            if self._interpolation_strategy in ['linear', 'quadratic', 'cubic']:
+                interpolant = interp1d(list(values_along_time.keys()), list(values_along_time.values()), kind=self._interpolation_strategy)
+            elif self._interpolation_strategy in ['quartic']:
+                tck = splrep(list(values_along_time.keys()), list(values_along_time.values()), k=4)
+                interpolant = lambda t: splev(t, tck)
             try:
                 return_value[i] = interpolant(time)
             except ValueError:
