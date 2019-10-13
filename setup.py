@@ -8,6 +8,6 @@ setup(name='waveform-bindings',
       author_email='benjamin.rueth@tum.de',
       license='LGPL-3.0',
       packages=['waveformbindings'],
-      install_requires=['precice', 'scipy', 'numpy>=1.13.3'],
+      install_requires=['precice_future', 'scipy', 'numpy>=1.13.3'],
       test_suite='tests',
       zip_safe=False)
