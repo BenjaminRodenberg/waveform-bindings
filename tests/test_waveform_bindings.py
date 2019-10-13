@@ -45,7 +45,9 @@ class TestWaveformBindings(TestCase):
         write_data = np.random.rand(self.n_vertices)
         read_data = old_data
         to_be_read = old_data + 1
-        bindings.initialize_waveforms(dummy_mesh_id, self.n_vertices, dummy_vertex_ids, "Dummy-Write", "Dummy-Read", 1, 1)
+        write_info = {"mesh_id": dummy_mesh_id, "n_vertices": self.n_vertices, "vertex_ids": dummy_vertex_ids, "data_name": "Dummy-Write", "data_dimension": 1}
+        read_info = {"mesh_id": dummy_mesh_id, "n_vertices": self.n_vertices, "vertex_ids": dummy_vertex_ids, "data_name": "Dummy-Read", "data_dimension": 1}
+        bindings.initialize_waveforms(write_info, read_info)
         bindings._read_data_buffer.append(to_be_read, 0)
         bindings._read_data_buffer.append(to_be_read, 1)
         Interface.read_block_scalar_data = MagicMock(return_value=to_be_read)
@@ -66,7 +68,9 @@ class TestWaveformBindings(TestCase):
         old_data = np.random.rand(self.n_vertices)
         to_be_written = old_data + np.random.rand(self.n_vertices)
         write_data = to_be_written
-        bindings.initialize_waveforms(dummy_mesh_id, self.n_vertices, dummy_vertex_ids, "Dummy-Write", "Dummy-Read", 1, 1)
+        write_info = {"mesh_id": dummy_mesh_id, "n_vertices": self.n_vertices, "vertex_ids": dummy_vertex_ids, "data_name": "Dummy-Write", "data_dimension": 1}
+        read_info = {"mesh_id": dummy_mesh_id, "n_vertices": self.n_vertices, "vertex_ids": dummy_vertex_ids, "data_name": "Dummy-Read", "data_dimension": 1}
+        bindings.initialize_waveforms(write_info, read_info)
         bindings._write_data_buffer.append(old_data, 0)
         bindings._write_data_buffer.append(old_data, 1)
         bindings._write_data_buffer.empty_data()
@@ -89,7 +93,9 @@ class TestWaveformBindings(TestCase):
         bindings._precice_tau = self.dt
         dummy_mesh_id = MagicMock()
         dummy_vertex_ids = np.random.rand(self.n_vertices)
-        bindings.initialize_waveforms(dummy_mesh_id, self.n_vertices, dummy_vertex_ids, "Dummy-Write", "Dummy-Read", 1, 1)
+        write_info = {"mesh_id": dummy_mesh_id, "n_vertices": self.n_vertices, "vertex_ids": dummy_vertex_ids, "data_name": "Dummy-Write", "data_dimension": 1}
+        read_info = {"mesh_id": dummy_mesh_id, "n_vertices": self.n_vertices, "vertex_ids": dummy_vertex_ids, "data_name": "Dummy-Read", "data_dimension": 1}
+        bindings.initialize_waveforms(write_info, read_info)
         bindings._write_data_buffer.append(np.zeros(self.n_vertices), 0)
         bindings._read_data_buffer.append(np.zeros(self.n_vertices), 0)
         bindings._read_data_buffer.append(np.zeros(self.n_vertices), 1)

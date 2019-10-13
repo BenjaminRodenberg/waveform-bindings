@@ -1,5 +1,7 @@
 import numpy as np
 import logging
+from multipledispatch import dispatch
+
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -34,22 +36,21 @@ class WaveformBindings(precice_future.Interface):
         self._window_time = self._current_window_start  # keeps track of window time
         self._interpolation_strategy = interpolation_strategy
 
-    def initialize_waveforms(self, mesh_id, n_vertices, vertex_ids, write_data_name, read_data_name, write_data_dimension, read_data_dimension):
+    def initialize_waveforms(self, write_info, read_info):
         logging.debug("Calling initialize_waveforms")
         logging.debug("Initializing waveforms.")
         # constant information of mesh
-        self._mesh_id = mesh_id
-        self._n_vertices = n_vertices
-        self._vertex_ids = vertex_ids
-        self._write_data_name = write_data_name
-        self._write_data_dimension = write_data_dimension
-        logging.debug("Creating write_data_buffer: data_dimension = {}".format(self._write_data_dimension))
-        self._write_data_buffer = Waveform(self._current_window_start, self._precice_tau, self._n_vertices, self._write_data_dimension, interpolation_strategy=self._interpolation_strategy)
+        assert (write_info["mesh_id"] == read_info["mesh_id"])
+        assert (write_info["n_vertices"] == read_info["n_vertices"])
+        assert ((write_info["vertex_ids"] == read_info["vertex_ids"]).all())
 
-        self._read_data_name = read_data_name
-        self._read_data_dimension = read_data_dimension
-        logging.debug("Creating read_data_buffer: data_dimension = {}".format(self._read_data_dimension))
-        self._read_data_buffer = Waveform(self._current_window_start, self._precice_tau, self._n_vertices, self._read_data_dimension, interpolation_strategy=self._interpolation_strategy)
+        self._write_info = write_info
+        logging.debug("Creating write_data_buffer: data_dimension = {}".format(self._write_info["data_dimension"]))
+        self._write_data_buffer = Waveform(self._current_window_start, self._precice_tau, self._write_info["n_vertices"], self._write_info["data_dimension"], interpolation_strategy=self._interpolation_strategy)
+
+        self._read_info = read_info
+        logging.debug("Creating read_data_buffer: data_dimension = {}".format(self._read_info["data_dimension"]))
+        self._read_data_buffer = Waveform(self._current_window_start, self._precice_tau, self._read_info["n_vertices"], self._read_info["data_dimension"], interpolation_strategy=self._interpolation_strategy)
 
     def perform_write_checks_and_append(self, write_data_name, mesh_id, vertex_ids, write_data, time):
         assert(self._is_inside_current_window(time))
@@ -58,9 +59,9 @@ class WaveformBindings(precice_future.Interface):
         logging.debug("write data is {write_data}".format(write_data=write_data))
         self._write_data_buffer.append(write_data[:], time)
         # we assert that the preCICE specific write parameters did not change since configure_waveform_relaxation
-        assert (self._mesh_id == mesh_id)
-        assert ((self._vertex_ids == vertex_ids).all())
-        assert (self._write_data_name == write_data_name)
+        assert (self._write_info["mesh_id"] == mesh_id)
+        assert ((self._write_info["vertex_ids"] == vertex_ids).all())
+        assert (self._write_info["data_name"] == write_data_name)
 
     def write_block_scalar_data(self, write_data_name, mesh_id, vertex_ids, write_data, time):
         logging.debug("calling write_block_scalar_data for time {time}".format(time=time))
@@ -77,9 +78,9 @@ class WaveformBindings(precice_future.Interface):
         read_data = self._read_data_buffer.sample(time)[:].copy()
         logging.debug("read_data is {read_data}".format(read_data=read_data))
         # we assert that the preCICE specific write parameters did not change since configure_waveform_relaxation
-        assert (self._mesh_id == mesh_id)
-        assert ((self._vertex_ids == vertex_ids).all())
-        assert (self._read_data_name == read_data_name)
+        assert (self._read_info["mesh_id"] == mesh_id)
+        assert ((self._read_info["vertex_ids"] == vertex_ids).all())
+        assert (self._read_info["data_name"] == read_data_name)
         return read_data
 
     def read_block_scalar_data(self, read_data_name, mesh_id, vertex_ids, time):
@@ -92,19 +93,19 @@ class WaveformBindings(precice_future.Interface):
 
     def _write_all_window_data_to_precice(self):
         logging.debug("Calling _write_all_window_data_to_precice")
-        write_data_name_prefix = self._write_data_name
+        write_data_name_prefix = self._write_info["data_name"]
         write_waveform = self._write_data_buffer
         logging.debug("write_waveform._temporal_grid = {grid}".format(grid=write_waveform._temporal_grid))
         for substep in range(1, self._n_this + 1):
             logging.debug("writing substep {substep} of {n_this}".format(substep=substep, n_this=self._n_this))
             write_data_name = write_data_name_prefix + str(substep)
-            write_data_id = self.get_data_id(write_data_name, self._mesh_id)
+            write_data_id = self.get_data_id(write_data_name, self._write_info["mesh_id"])
             substep_time = write_waveform._temporal_grid[substep]
             write_data = write_waveform._samples_in_time[:, substep]
-            if self._write_data_dimension == 1:
-                super().write_block_scalar_data(write_data_id, self._vertex_ids, write_data)
-            elif self._write_data_dimension == self.get_dimensions():
-                super().write_block_vector_data(write_data_id, self._vertex_ids, write_data)
+            if self._write_info["data_dimension"] == 1:
+                super().write_block_scalar_data(write_data_id, self._write_info["vertex_ids"], write_data)
+            elif self._write_info["data_dimension"] == self.get_dimensions():
+                super().write_block_vector_data(write_data_id, self._write_info["vertex_ids"], write_data)
             logging.debug("write data called {name}:{write_data} @ time = {time}".format(name=write_data_name,
                                                                                          write_data=write_data,
                                                                                          time=substep_time))
@@ -114,19 +115,19 @@ class WaveformBindings(precice_future.Interface):
 
     def _read_all_window_data_from_precice(self):
         logging.debug("Calling _read_all_window_data_from_precice")
-        read_data_name_prefix = self._read_data_name
+        read_data_name_prefix = self._read_info["data_name"]
         read_waveform = self._read_data_buffer
         read_waveform.empty_data(keep_first_sample=True)
         read_times = np.linspace(self._current_window_start, self._current_window_end(), self._n_other + 1)  # todo THIS IS HARDCODED! FOR ADAPTIVE GRIDS THIS IS NOT FITTING.
 
         for substep in range(1, self._n_other + 1):
             read_data_name = read_data_name_prefix + str(substep)
-            read_data_id = self.get_data_id(read_data_name, self._mesh_id)
+            read_data_id = self.get_data_id(read_data_name, self._read_info["mesh_id"])
             substep_time = read_times[substep]
-            if self._read_data_dimension == 1:
-                read_data = super().read_block_scalar_data(read_data_id, self._vertex_ids)
-            elif self._read_data_dimension == self.get_dimensions():
-                read_data = super().read_block_vector_data(read_data_id, self._vertex_ids)
+            if self._read_info["data_dimension"] == 1:
+                read_data = super().read_block_scalar_data(read_data_id, self._read_info["vertex_ids"])
+            elif self._read_info["data_dimension"] == self.get_dimensions():
+                read_data = super().read_block_vector_data(read_data_id, self._read_info["vertex_ids"])
             logging.debug("reading at time {time}".format(time=substep_time))
             logging.debug("read_data called {name}:{read_data} @ time = {time}".format(name=read_data_name,
                                                                                        read_data=read_data,
@@ -140,7 +141,7 @@ class WaveformBindings(precice_future.Interface):
             logging.debug("Window is complete.")
 
             logging.debug("print write waveform")
-            logging.debug(self._write_data_name)
+            logging.debug(self._write_info["data_name"])
             self._write_data_buffer.print_waveform()
             self._write_all_window_data_to_precice()
             logging.debug("calling precice_future.advance")
@@ -167,19 +168,20 @@ class WaveformBindings(precice_future.Interface):
                 self._window_time = 0
                 # initialize window start of new window with data from window end of old window
                 logging.debug("create new write data buffer")
-                self._write_data_buffer = Waveform(self._current_window_start, self._precice_tau, self._n_vertices, self._write_data_dimension, interpolation_strategy=self._interpolation_strategy)
+                self._write_data_buffer = Waveform(self._current_window_start, self._precice_tau, self._write_info["n_vertices"],
+                                                   self._write_info["data_dimension"], interpolation_strategy=self._interpolation_strategy)
                 self._write_data_buffer.append(write_data_init, self._current_window_start)
                 # use constant extrapolation as initial guess for read data
                 logging.debug("create new read data buffer with initial guess")
-                self._read_data_buffer = Waveform(self._current_window_start, self._precice_tau, self._n_vertices,
-                                                  self._read_data_dimension, interpolation_strategy=self._interpolation_strategy)
+                self._read_data_buffer = Waveform(self._current_window_start, self._precice_tau, self._read_info["n_vertices"],
+                                                  self._read_info["data_dimension"], interpolation_strategy=self._interpolation_strategy)
                 self._read_data_buffer.append(read_data_init,
                                               self._current_window_start)
                 self._read_all_window_data_from_precice()  # this read buffer will be overwritten anyway. todo: initial guess is currently not treated properly!
                 self._print_window_status()
 
             logging.debug("print read waveform")
-            logging.debug(self._read_data_name)
+            logging.debug(self._read_info["data_name"])
             self._read_data_buffer.print_waveform()
 
         else:
