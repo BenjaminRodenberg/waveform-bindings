@@ -31,7 +31,7 @@ class TestWaveformBindings(TestCase):
             from waveformbindings import WaveformBindings
             WaveformBindings("Dummy", 0, 1)
 
-    def test_read(self):
+    def test_read_scalar(self):
         from waveformbindings import WaveformBindings
         from precice_future import Interface
 
@@ -54,7 +54,7 @@ class TestWaveformBindings(TestCase):
         read_data = bindings.read_block_scalar_data("Dummy-Read", dummy_mesh_id, dummy_vertex_ids, 0)
         self.assertTrue(np.isclose(read_data, to_be_read).all())
 
-    def test_write(self):
+    def test_write_scalar(self):
         from waveformbindings import WaveformBindings
         from precice_future import Interface
 

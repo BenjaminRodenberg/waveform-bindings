@@ -24,12 +24,12 @@ class TestWaveform(TestCase):
         self.input_data = np.array([1, 2, 3])
         self.n_datapoints = len(self.input_data)
 
-    def test_initialize_data(self):
+    def test_initialize_scalar_data(self):
         from waveformbindings.waveformbindings import Waveform
         self.waveform = Waveform(self.window_start, self.window_size, self.n_datapoints, 1)
         self.waveform.initialize_constant(self.input_data)
 
-    def test_sample_data(self):
+    def test_sample_scalar_data(self):
         from waveformbindings.waveformbindings import Waveform
         self.waveform = Waveform(self.window_start, self.window_size, self.n_datapoints, 1)
         from waveformbindings.waveformbindings import OutOfLocalWindowError, NoDataError
