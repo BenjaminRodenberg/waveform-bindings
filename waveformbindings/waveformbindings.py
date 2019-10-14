@@ -65,10 +65,12 @@ class WaveformBindings(precice_future.Interface):
 
     def write_block_scalar_data(self, write_data_name, mesh_id, vertex_ids, write_data, time):
         logging.debug("calling write_block_scalar_data for time {time}".format(time=time))
+        assert (self._write_info["data_dimension"] == 1)
         self.perform_write_checks_and_append(write_data_name, mesh_id, vertex_ids, write_data, time)
 
     def write_block_vector_data(self, write_data_name, mesh_id, vertex_ids, write_data, time):
         logging.debug("calling write_block_vector_data for time {time}".format(time=time))
+        assert (self._write_info["data_dimension"] == self.get_dimensions())
         self.perform_write_checks_and_append(write_data_name, mesh_id, vertex_ids, write_data, time)
 
     def perform_read_checks_and_sample(self, read_data_name, mesh_id, vertex_ids, time):
@@ -85,10 +87,12 @@ class WaveformBindings(precice_future.Interface):
 
     def read_block_scalar_data(self, read_data_name, mesh_id, vertex_ids, time):
         logging.debug("calling read_block_scalar_data for time {time}".format(time=time))
+        assert(self._read_info["data_dimension"] == 1)
         return self.perform_read_checks_and_sample(read_data_name, mesh_id, vertex_ids, time)
 
     def read_block_vector_data(self, read_data_name, mesh_id, vertex_ids, time):
         logging.debug("calling read_block_vector_data for time {time}".format(time=time))
+        assert (self._read_info["data_dimension"] == self.get_dimensions())
         return self.perform_read_checks_and_sample(read_data_name, mesh_id, vertex_ids, time)
 
     def _write_all_window_data_to_precice(self):
