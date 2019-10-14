@@ -21,13 +21,20 @@ class TestWaveform(TestCase):
         self.window_size = 3
         self.n_samples = 10
         self.global_time_grid = self.window_start + self.window_size * np.linspace(0, 1, self.n_samples)
-        self.input_data = np.array([1, 2, 3])
-        self.n_datapoints = len(self.input_data)
+        self.n_datapoints = 3
+        self.dimensions = 2
+        self.scalar_input_data = np.array(range(self.n_datapoints))
+        self.vector_input_data = np.array([[1, 1], [2, 2], [3, 3]])
 
     def test_initialize_scalar_data(self):
         from waveformbindings.waveformbindings import Waveform
         self.waveform = Waveform(self.window_start, self.window_size, self.n_datapoints, 1)
-        self.waveform.initialize_constant(self.input_data)
+        self.waveform.initialize_constant(self.scalar_input_data)
+
+    def test_initialize_vector_data(self):
+        from waveformbindings.waveformbindings import Waveform
+        self.waveform = Waveform(self.window_start, self.window_size, self.n_datapoints, self.dimensions)
+        self.waveform.initialize_constant(self.vector_input_data)
 
     def test_sample_scalar_data(self):
         from waveformbindings.waveformbindings import Waveform
@@ -37,11 +44,30 @@ class TestWaveform(TestCase):
         with self.assertRaises(NoDataError):
             out = self.waveform.sample(0)
 
-        self.waveform.initialize_constant(self.input_data)
+        self.waveform.initialize_constant(self.scalar_input_data)
 
         for t in np.linspace(self.global_time_grid[0], self.global_time_grid[-1]):
             out = self.waveform.sample(t)
-            npt.assert_almost_equal(out, self.input_data)
+            npt.assert_almost_equal(out, self.scalar_input_data)
+
+        with self.assertRaises(OutOfLocalWindowError):
+            self.waveform.sample(self.global_time_grid[-1] + .1)
+        with self.assertRaises(OutOfLocalWindowError):
+            self.waveform.sample(self.global_time_grid[0] - .1)
+
+    def test_sample_vector_data(self):
+        from waveformbindings.waveformbindings import Waveform
+        self.waveform = Waveform(self.window_start, self.window_size, self.n_datapoints, self.dimensions)
+        from waveformbindings.waveformbindings import OutOfLocalWindowError, NoDataError
+
+        with self.assertRaises(NoDataError):
+            out = self.waveform.sample(0)
+
+        self.waveform.initialize_constant(self.vector_input_data)
+
+        for t in np.linspace(self.global_time_grid[0], self.global_time_grid[-1]):
+            out = self.waveform.sample(t)
+            npt.assert_almost_equal(out, self.vector_input_data)
 
         with self.assertRaises(OutOfLocalWindowError):
             self.waveform.sample(self.global_time_grid[-1] + .1)

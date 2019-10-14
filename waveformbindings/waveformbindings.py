@@ -1,5 +1,6 @@
 import numpy as np
 import logging
+import itertools
 
 
 logging.basicConfig(level=logging.WARNING)
@@ -329,8 +330,8 @@ class Waveform:
         :param time: associated time
         :return:
         """
-        data = data.reshape((data.size, 1))
-        self._samples_in_time = np.append(self._samples_in_time, data, axis=1)
+        data = np.expand_dims(data, axis=data.ndim)
+        self._samples_in_time = np.append(self._samples_in_time, data, axis=data.ndim-1)
         self._temporal_grid.append(time)
 
     def initialize_constant(self, data):
@@ -355,20 +356,29 @@ class Waveform:
                 grid=self._temporal_grid)
             raise OutOfLocalWindowError(msg)
 
-        return_value = np.zeros(self._n_datapoints * self._data_dimension)
-        for i in range(self._n_datapoints * self._data_dimension):
+        if self._data_dimension > 1:
+            return_value = np.zeros((self._n_datapoints, self._data_dimension))
+        else:
+            return_value = np.zeros(self._n_datapoints)
+
+        for i, d in itertools.product(range(self._n_datapoints), range(self._data_dimension)):
             values_along_time = dict()
             for j in range(len(self._temporal_grid)):
                 t = self._temporal_grid[j]
-                #values_along_time[t] = self._samples_in_time[i, len(self._temporal_grid)-1]  # this line results in constant extrapolation = plain subcycling.
-                values_along_time[t] = self._samples_in_time[i, j]
+                if self._data_dimension > 1:
+                    values_along_time[t] = self._samples_in_time[i, d, j]
+                else:
+                    values_along_time[t] = self._samples_in_time[i, j]
             if self._interpolation_strategy in ['linear', 'quadratic', 'cubic']:
                 interpolant = interp1d(list(values_along_time.keys()), list(values_along_time.values()), kind=self._interpolation_strategy)
             elif self._interpolation_strategy in ['quartic']:
                 tck = splrep(list(values_along_time.keys()), list(values_along_time.values()), k=4)
                 interpolant = lambda t: splev(t, tck)
             try:
-                return_value[i] = interpolant(time)
+                if self._data_dimension > 1:
+                    return_value[i, d] = interpolant(time)
+                else:
+                    return_value[i] = interpolant(time)
             except ValueError:
                 time_min = np.min(self._temporal_grid)
                 time_max = np.max(self._temporal_grid)
@@ -388,9 +398,11 @@ class Waveform:
 
     def append(self, data, time):
         try:
-            assert (data.shape[0] == self._n_datapoints * self._data_dimension)
+            assert (data.shape[0] == self._n_datapoints)
+            if self._data_dimension > 1:
+                assert (data.shape[1] == self._data_dimension)
         except AssertionError:
-            raise Exception("Data shape does NOT fit: shape expected = {}, shape retreived = {}".format(data.shape[0], self._n_datapoints * self._data_dimension))
+            raise Exception("Data shape does NOT fit: shape expected = {shape_expected}, shape retreived = {shape_retrieved}".format(shape_expected=(self._n_datapoints, self._data_dimension), shape_retrieved=data.shape))
 
         if time in self._temporal_grid or (self._temporal_grid and time <= self._temporal_grid[-1]):
             raise Exception("It is only allowed to append data associated with time that is larger than the already existing time. Trying to append invalid time = {time} to temporal grid = {temporal_grid}".format(time=time, temporal_grid=self._temporal_grid))
@@ -402,19 +414,31 @@ class Waveform:
         if keep_first_sample:
             first_sample, first_time = self.get_init()
             assert(first_time == self._window_start)
-        self._samples_in_time = np.empty(shape=(self._n_datapoints * self._data_dimension, 0))  # store samples in time in this data structure. Number of rows = number of gridpoints per sample; number of columns = number of sampls in time
+        if self._data_dimension > 1:
+            self._samples_in_time = np.empty(shape=(self._n_datapoints, self._data_dimension, 0))  # store samples in time in this data structure. Number of rows = number of gridpoints per sample; number of columns = number of sampls in time
+        else:
+            self._samples_in_time = np.empty(shape=(self._n_datapoints, 0))  # store samples in time in this data structure. Number of rows = number of gridpoints per sample; number of columns = number of sampls in time
         self._temporal_grid = list()  # store time associated to samples in this datastructure
         if keep_first_sample:
             self._append_sample(first_sample, first_time)
 
     def get_init(self):
-        return self._samples_in_time[:, 0], self._temporal_grid[0]
+        if self._data_dimension > 1:
+            return self._samples_in_time[:, :, 0], self._temporal_grid[0]
+        else:
+            return self._samples_in_time[:, 0], self._temporal_grid[0]
 
     def get_empty_ndarray(self):
-        return np.empty(self._n_datapoints * self._data_dimension)
+        if self._data_dimension > 1:
+            return np.empty(self._n_datapoints, self._data_dimension)
+        else:
+            return np.empty(self._n_datapoints)
 
     def copy_second_to_first(self):
-        self._samples_in_time[:, 0] = self._samples_in_time[:, 1]
+        if self._data_dimension > 1:
+            self._samples_in_time[:, :, 0] = self._samples_in_time[:, :, 1]
+        else:
+            self._samples_in_time[:, 0] = self._samples_in_time[:, 1]
 
     def print_waveform(self):
         logging.debug("time: {time}".format(time=self._temporal_grid))
