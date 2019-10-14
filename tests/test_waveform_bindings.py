@@ -19,6 +19,7 @@ class TestWaveformBindings(TestCase):
     n = 0
     dummy_config = "tests/precice-adapter-config-WR10.json"
     n_vertices = 5
+    dimensions = 2
 
     def setUp(self):
         warnings.simplefilter('ignore', category=ImportWarning)
@@ -51,7 +52,30 @@ class TestWaveformBindings(TestCase):
         bindings._read_data_buffer.append(to_be_read, 0)
         bindings._read_data_buffer.append(to_be_read, 1)
         Interface.read_block_scalar_data = MagicMock(return_value=to_be_read)
+        Interface.get_dimensions = MagicMock(return_value=self.dimensions)
         read_data = bindings.read_block_scalar_data("Dummy-Read", dummy_mesh_id, dummy_vertex_ids, 0)
+        self.assertTrue(np.isclose(read_data, to_be_read).all())
+
+    def test_read_vector(self):
+        from waveformbindings import WaveformBindings
+        from precice_future import Interface
+
+        Interface.get_data_id = MagicMock()
+        dummy_mesh_id = MagicMock()
+        dummy_vertex_ids = np.random.rand(10)
+        bindings = WaveformBindings("Dummy", 0, 1)
+        bindings.configure_waveform_relaxation(1, 10)
+        bindings._precice_tau = self.dt
+        old_data = np.random.rand(self.n_vertices, self.dimensions)
+        to_be_read = old_data + 1
+        write_info = {"mesh_id": dummy_mesh_id, "n_vertices": self.n_vertices, "vertex_ids": dummy_vertex_ids, "data_name": "Dummy-Write", "data_dimension": self.dimensions}
+        read_info = {"mesh_id": dummy_mesh_id, "n_vertices": self.n_vertices, "vertex_ids": dummy_vertex_ids, "data_name": "Dummy-Read", "data_dimension": self.dimensions}
+        bindings.initialize_waveforms(write_info, read_info)
+        bindings._read_data_buffer.append(to_be_read, 0)
+        bindings._read_data_buffer.append(to_be_read, 1)
+        Interface.read_block_vector_data = MagicMock(return_value=to_be_read)
+        Interface.get_dimensions = MagicMock(return_value=self.dimensions)
+        read_data = bindings.read_block_vector_data("Dummy-Read", dummy_mesh_id, dummy_vertex_ids, 0)
         self.assertTrue(np.isclose(read_data, to_be_read).all())
 
     def test_write_scalar(self):
@@ -60,6 +84,7 @@ class TestWaveformBindings(TestCase):
 
         Interface.get_data_id = MagicMock()
         Interface.write_block_scalar_data = MagicMock()
+        Interface.get_dimensions = MagicMock(return_value=self.dimensions)
         bindings = WaveformBindings("Dummy", 0, 1)
         bindings.configure_waveform_relaxation(10, 1)
         bindings._precice_tau = self.dt
@@ -76,6 +101,31 @@ class TestWaveformBindings(TestCase):
         bindings._write_data_buffer.empty_data()
         bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, write_data, 0)
         bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, write_data, 1)
+        self.assertTrue(np.isclose(to_be_written, bindings._write_data_buffer.sample(0)).all())
+
+    def test_write_vector(self):
+        from waveformbindings import WaveformBindings
+        from precice_future import Interface
+
+        Interface.get_data_id = MagicMock()
+        Interface.write_block_vector_data = MagicMock()
+        Interface.get_dimensions = MagicMock(return_value=self.dimensions)
+        bindings = WaveformBindings("Dummy", 0, 1)
+        bindings.configure_waveform_relaxation(10, 1)
+        bindings._precice_tau = self.dt
+        dummy_mesh_id = MagicMock()
+        dummy_vertex_ids = np.random.rand(10)
+        old_data = np.random.rand(self.n_vertices, self.dimensions)
+        to_be_written = old_data + np.random.rand(self.n_vertices, self.dimensions)
+        write_data = to_be_written
+        write_info = {"mesh_id": dummy_mesh_id, "n_vertices": self.n_vertices, "vertex_ids": dummy_vertex_ids, "data_name": "Dummy-Write", "data_dimension": self.dimensions}
+        read_info = {"mesh_id": dummy_mesh_id, "n_vertices": self.n_vertices, "vertex_ids": dummy_vertex_ids, "data_name": "Dummy-Read", "data_dimension": self.dimensions}
+        bindings.initialize_waveforms(write_info, read_info)
+        bindings._write_data_buffer.append(old_data, 0)
+        bindings._write_data_buffer.append(old_data, 1)
+        bindings._write_data_buffer.empty_data()
+        bindings.write_block_vector_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, write_data, 0)
+        bindings.write_block_vector_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, write_data, 1)
         self.assertTrue(np.isclose(to_be_written, bindings._write_data_buffer.sample(0)).all())
 
     def test_do_some_steps(self):
