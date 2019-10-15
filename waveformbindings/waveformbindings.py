@@ -40,9 +40,9 @@ class WaveformBindings(precice_future.Interface):
         logging.debug("Calling initialize_waveforms")
         logging.debug("Initializing waveforms.")
         # constant information of mesh
-        assert (write_info["mesh_id"] == read_info["mesh_id"])
-        assert (write_info["n_vertices"] == read_info["n_vertices"])
-        assert ((write_info["vertex_ids"] == read_info["vertex_ids"]).all())
+        #assert (write_info["mesh_id"] == read_info["mesh_id"])
+        #assert (write_info["n_vertices"] == read_info["n_vertices"])
+        #assert ((write_info["vertex_ids"] == read_info["vertex_ids"]).all())
 
         self._write_info = write_info
         logging.debug("Creating write_data_buffer: data_dimension = {}".format(self._write_info["data_dimension"]))
@@ -105,11 +105,20 @@ class WaveformBindings(precice_future.Interface):
             write_data_name = write_data_name_prefix + str(substep)
             write_data_id = self.get_data_id(write_data_name, self._write_info["mesh_id"])
             substep_time = write_waveform._temporal_grid[substep]
-            write_data = write_waveform._samples_in_time[:, substep]
+         
             if self._write_info["data_dimension"] == 1:
+                write_data = write_waveform._samples_in_time[:, substep]
                 super().write_block_scalar_data(write_data_id, self._write_info["vertex_ids"], write_data)
             elif self._write_info["data_dimension"] == self.get_dimensions():
+                write_data = write_waveform._samples_in_time[:, :, substep]
                 super().write_block_vector_data(write_data_id, self._write_info["vertex_ids"], write_data)
+         
+            #write_data = write_waveform._samples_in_time[:, substep]
+            #if self._write_info["data_dimension"] == 1:
+            #    super().write_block_scalar_data(write_data_id, self._write_info["vertex_ids"], write_data)
+            #elif self._write_info["data_dimension"] == self.get_dimensions():
+            #    super().write_block_vector_data(write_data_id, self._write_info["vertex_ids"], write_data)
+         
             logging.debug("write data called {name}:{write_data} @ time = {time}".format(name=write_data_name,
                                                                                          write_data=write_data,
                                                                                          time=substep_time))
@@ -395,7 +404,13 @@ class Waveform:
                         time = time_max
                     else:
                         raise Exception("Invalid time {time} computed!".format(time=time))
-                return_value[i] = interpolant(time)
+                #return_value[i] = interpolant(time)
+                if self._data_dimension > 1:
+                    return_value[i, d] = interpolant(time)
+                else:
+                    return_value[i] = interpolant(time)
+
+
 
         logging.debug("result is {result}.".format(result=return_value))
         return return_value
