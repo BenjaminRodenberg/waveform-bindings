@@ -117,10 +117,11 @@ class WaveformBindings(precice_future.Interface):
     def _rollback_write_data_buffer(self):
         self._write_data_buffer.empty_data(keep_first_sample=True)
 
-    def _read_all_window_data_from_precice(self):
+    def _read_all_window_data_from_precice(self, do_underrelaxation=True, relaxation_factor=0.5):
         logging.debug("Calling _read_all_window_data_from_precice")
         read_data_name_prefix = self._read_info["data_name"]
         read_waveform = self._read_data_buffer
+        old_read_waveform = read_waveform.copy()
         read_waveform.empty_data(keep_first_sample=True)
         read_times = np.linspace(self._current_window_start, self._current_window_end(), self._n_other + 1)  # todo THIS IS HARDCODED! FOR ADAPTIVE GRIDS THIS IS NOT FITTING.
 
@@ -136,6 +137,10 @@ class WaveformBindings(precice_future.Interface):
             logging.debug("read_data called {name}:{read_data} @ time = {time}".format(name=read_data_name,
                                                                                        read_data=read_data,
                                                                                        time=substep_time))
+            if do_underrelaxation:
+                assert (0 <= relaxation_factor <= 1)
+                read_old = old_read_waveform.sample(substep_time)
+                read_data = (1 - relaxation_factor) * read_old + relaxation_factor * read_data
             read_waveform.append(read_data, substep_time)
 
     def advance(self, dt):
@@ -179,8 +184,8 @@ class WaveformBindings(precice_future.Interface):
                 logging.debug("create new read data buffer with initial guess")
                 self._read_data_buffer = Waveform(self._current_window_start, self._precice_tau, self._read_info["n_vertices"],
                                                   self._read_info["data_dimension"], interpolation_strategy=self._interpolation_strategy)
-                self._read_data_buffer.append(read_data_init,
-                                              self._current_window_start)
+                self._read_data_buffer.append(read_data_init, self._current_window_start)
+                self._read_data_buffer.append(read_data_init, self._current_window_end())
                 self._read_all_window_data_from_precice()  # this read buffer will be overwritten anyway. todo: initial guess is currently not treated properly!
                 self._print_window_status()
 
@@ -281,6 +286,7 @@ class WaveformBindings(precice_future.Interface):
             self._read_data_buffer.empty_data(keep_first_sample=False)
             if isinstance(read_zero, np.ndarray):
                 self._read_data_buffer.append(read_zero, self._current_window_start)
+                self._read_data_buffer.append(read_zero, self._current_window_end())
             else:
                 self._read_data_buffer.append(self._read_data_buffer.get_empty_ndarray(), self._current_window_start)
             self._read_all_window_data_from_precice()
@@ -447,4 +453,11 @@ class Waveform:
     def print_waveform(self):
         logging.debug("time: {time}".format(time=self._temporal_grid))
         logging.debug("data: {data}".format(data=self._samples_in_time))
+
+    def copy(self):
+        copy_of_waveform = Waveform(self._window_start, self._window_size, self._n_datapoints, self._data_dimension, self._interpolation_strategy)
+        copy_of_waveform._samples_in_time = self._samples_in_time
+        copy_of_waveform._temporal_grid = self._temporal_grid.copy()
+        copy_of_waveform._samples_in_time = self._samples_in_time.copy()
+        return copy_of_waveform
 
