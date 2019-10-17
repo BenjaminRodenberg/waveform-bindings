@@ -101,12 +101,11 @@ class WaveformBindings(precice_future.Interface):
             write_data_name = write_data_name_prefix + str(substep)
             write_data_id = self.get_data_id(write_data_name, self._write_info["mesh_id"])
             substep_time = write_waveform._temporal_grid[substep]
-         
+
+            write_data = write_waveform.sample(substep_time)
             if self._write_info["data_dimension"] == 1:
-                write_data = write_waveform._samples_in_time[:, substep]
                 super().write_block_scalar_data(write_data_id, self._write_info["vertex_ids"], write_data)
             elif self._write_info["data_dimension"] == self.get_dimensions():
-                write_data = write_waveform._samples_in_time[:, :, substep]
                 super().write_block_vector_data(write_data_id, self._write_info["vertex_ids"], write_data)
       
             logging.debug("write data called {name}:{write_data} @ time = {time}".format(name=write_data_name,
