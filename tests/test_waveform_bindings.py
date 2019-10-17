@@ -20,6 +20,7 @@ class TestWaveformBindings(TestCase):
     dummy_config = "tests/precice-adapter-config-WR10.json"
     n_vertices = 5
     dimensions = 2
+    dummy_data_id = 6576
 
     def setUp(self):
         warnings.simplefilter('ignore', category=ImportWarning)
@@ -178,3 +179,44 @@ class TestWaveformBindings(TestCase):
         bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, (i + 1) * np.ones(self.n_vertices), bindings._current_window_start + bindings._window_time + .1)
         bindings.advance(.1)
         self.assertTrue(np.isclose(bindings._current_window_start, 1.0))
+
+    def test_write_vector_data_to_precice(self):
+        from waveformbindings import WaveformBindings
+        from precice_future import Interface
+        import numpy.testing as npt
+        Interface.advance = MagicMock()
+        Interface.get_data_id = MagicMock(return_value=self.dummy_data_id)
+        Interface.get_dimensions = MagicMock(return_value=self.dimensions)
+        Interface.write_block_vector_data = MagicMock()
+        bindings = WaveformBindings("Dummy", 0, 1)
+        bindings.read_slope = 0
+        bindings.write_slope = 0
+        bindings.configure_waveform_relaxation(1, 1)
+        bindings._precice_tau = self.dt
+        dummy_mesh_id = MagicMock()
+        dummy_vertex_ids = np.random.rand(self.n_vertices)
+        dummy_write_data = np.random.rand(self.n_vertices, self.dimensions)
+        write_info = {"mesh_id": dummy_mesh_id, "n_vertices": self.n_vertices, "vertex_ids": dummy_vertex_ids,
+                      "data_name": "Dummy-Write", "data_dimension": self.dimensions}
+        read_info = {"mesh_id": dummy_mesh_id, "n_vertices": self.n_vertices, "vertex_ids": dummy_vertex_ids,
+                     "data_name": "Dummy-Read", "data_dimension": self.dimensions}
+        bindings.initialize_waveforms(write_info, read_info)
+        bindings._write_data_buffer.append(np.zeros((self.n_vertices, self.dimensions)), 0)
+        bindings._read_data_buffer.append(np.zeros((self.n_vertices, self.dimensions)), 0)
+        bindings._read_data_buffer.append(np.zeros((self.n_vertices, self.dimensions)), 1)
+        bindings._precice_tau = self.dt
+        Interface.is_action_required = MagicMock(return_value=False)
+        self.assertEqual(bindings._current_window_start, 0.0)
+        bindings.write_block_vector_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, dummy_write_data,
+                                         bindings._window_time + self.dt)
+        self.assertEqual(bindings._window_time, 0)
+        self.assertEqual(bindings._current_window_start, 0)
+        self.assertEqual(bindings._window_size(), self.dt)
+        bindings.advance(self.dt)
+        # replaces the following call, since we cannot compare np.arrays
+        # Interface.write_block_vector_data.assert_called_with(self.dummy_data_id, dummy_vertex_ids, dummy_write_data)
+        self.assertEqual(Interface.write_block_vector_data.call_args[0][0], self.dummy_data_id)
+        npt.assert_array_equal(Interface.write_block_vector_data.call_args[0][1], dummy_vertex_ids)
+        npt.assert_array_equal(Interface.write_block_vector_data.call_args[0][2], dummy_write_data)
+        self.assertEqual(bindings._window_time, 0)
+        self.assertEqual(bindings._current_window_start, self.dt)
