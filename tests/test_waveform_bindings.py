@@ -129,57 +129,6 @@ class TestWaveformBindings(TestCase):
         bindings.write_block_vector_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, write_data, 1)
         self.assertTrue(np.isclose(to_be_written, bindings._write_data_buffer.sample(0)).all())
 
-    def test_do_some_steps(self):
-        from waveformbindings import WaveformBindings
-        from precice_future import Interface, action_read_iteration_checkpoint, action_write_iteration_checkpoint
-
-        Interface.advance = MagicMock()
-        Interface.get_data_id = MagicMock()
-        Interface.read_block_scalar_data = MagicMock(return_value=np.zeros(self.n_vertices))
-        Interface.write_block_scalar_data = MagicMock()
-        bindings = WaveformBindings("Dummy", 0, 1)
-        bindings.read_slope = 0
-        bindings.write_slope = 0
-        bindings.configure_waveform_relaxation(1, 10)
-        bindings._precice_tau = self.dt
-        dummy_mesh_id = MagicMock()
-        dummy_vertex_ids = np.random.rand(self.n_vertices)
-        write_info = {"mesh_id": dummy_mesh_id, "n_vertices": self.n_vertices, "vertex_ids": dummy_vertex_ids, "data_name": "Dummy-Write", "data_dimension": 1}
-        read_info = {"mesh_id": dummy_mesh_id, "n_vertices": self.n_vertices, "vertex_ids": dummy_vertex_ids, "data_name": "Dummy-Read", "data_dimension": 1}
-        bindings.initialize_waveforms(write_info, read_info)
-        bindings._write_data_buffer.append(np.zeros(self.n_vertices), 0)
-        bindings._read_data_buffer.append(np.zeros(self.n_vertices), 0)
-        bindings._read_data_buffer.append(np.zeros(self.n_vertices), 1)
-        bindings._precice_tau = self.dt
-        Interface.is_action_required = MagicMock(return_value=False)
-        self.assertEqual(bindings._current_window_start, 0.0)
-        for i in range(9):
-            self.assertTrue(np.isclose(bindings._window_time, i * .1))
-            bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, (i + 1) * np.ones(self.n_vertices), bindings._window_time + .1)
-            bindings.advance(.1)
-            self.assertTrue(np.isclose(bindings._window_time, (i+1) * .1))
-            self.assertTrue(np.isclose(bindings._current_window_start, 0.0))
-        bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, (i + 1) * np.ones(self.n_vertices), bindings._window_time + .1)
-        bindings.advance(.1)
-        self.assertTrue(np.isclose(bindings._current_window_start, 1.0))
-
-        def is_action_required_behavior(py_action):
-            if py_action == action_read_iteration_checkpoint():
-                return True
-            elif py_action == action_write_iteration_checkpoint():
-                return False
-        Interface.is_action_required = MagicMock(side_effect=is_action_required_behavior)
-
-        for i in range(9):
-            self.assertTrue(np.isclose(bindings._window_time, i * .1))
-            bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, np.random.rand(self.n_vertices), bindings._current_window_start + bindings._window_time + .1)
-            bindings.advance(.1)
-            self.assertTrue(np.isclose(bindings._window_time, (i+1) * .1))
-            self.assertTrue(np.isclose(bindings._current_window_start, 1.0))
-        bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, (i + 1) * np.ones(self.n_vertices), bindings._current_window_start + bindings._window_time + .1)
-        bindings.advance(.1)
-        self.assertTrue(np.isclose(bindings._current_window_start, 1.0))
-
     def test_write_vector_data_to_precice(self):
         from waveformbindings import WaveformBindings
         from precice_future import Interface
@@ -220,3 +169,57 @@ class TestWaveformBindings(TestCase):
         npt.assert_array_equal(Interface.write_block_vector_data.call_args[0][2], dummy_write_data)
         self.assertEqual(bindings._window_time, 0)
         self.assertEqual(bindings._current_window_start, self.dt)
+
+    def test_do_some_steps(self):
+        from waveformbindings import WaveformBindings
+        from precice_future import Interface, action_read_iteration_checkpoint, action_write_iteration_checkpoint
+
+        Interface.advance = MagicMock()
+        Interface.get_data_id = MagicMock()
+        Interface.read_block_scalar_data = MagicMock(return_value=np.zeros(self.n_vertices))
+        Interface.write_block_scalar_data = MagicMock()
+        Interface.is_timestep_complete = MagicMock(return_value=False)
+        bindings = WaveformBindings("Dummy", 0, 1)
+        bindings.read_slope = 0
+        bindings.write_slope = 0
+        bindings.configure_waveform_relaxation(1, 10)
+        bindings._precice_tau = self.dt
+        dummy_mesh_id = MagicMock()
+        dummy_vertex_ids = np.random.rand(self.n_vertices)
+        write_info = {"mesh_id": dummy_mesh_id, "n_vertices": self.n_vertices, "vertex_ids": dummy_vertex_ids, "data_name": "Dummy-Write", "data_dimension": 1}
+        read_info = {"mesh_id": dummy_mesh_id, "n_vertices": self.n_vertices, "vertex_ids": dummy_vertex_ids, "data_name": "Dummy-Read", "data_dimension": 1}
+        bindings.initialize_waveforms(write_info, read_info)
+        bindings._write_data_buffer.append(np.zeros(self.n_vertices), 0)
+        bindings._read_data_buffer.append(np.zeros(self.n_vertices), 0)
+        bindings._read_data_buffer.append(np.zeros(self.n_vertices), 1)
+        bindings._precice_tau = self.dt
+        Interface.is_action_required = MagicMock(return_value=False)
+        self.assertEqual(bindings._current_window_start, 0.0)
+        for i in range(9):
+            self.assertTrue(np.isclose(bindings._window_time, i * .1))
+            bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, (i + 1) * np.ones(self.n_vertices), bindings._window_time + .1)
+            bindings.advance(.1)
+            self.assertTrue(np.isclose(bindings._window_time, (i+1) * .1))
+            self.assertTrue(np.isclose(bindings._current_window_start, 0.0))
+        bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, (i + 1) * np.ones(self.n_vertices), bindings._window_time + .1)
+        Interface.is_timestep_complete = MagicMock(return_value=True)
+        bindings.advance(.1)
+        self.assertTrue(np.isclose(bindings._current_window_start, 1.0))
+
+        def is_action_required_behavior(py_action):
+            if py_action == action_read_iteration_checkpoint():
+                return True
+            elif py_action == action_write_iteration_checkpoint():
+                return False
+        Interface.is_action_required = MagicMock(side_effect=is_action_required_behavior)
+        Interface.is_timestep_complete = MagicMock(return_value=False)
+        for i in range(9):
+            self.assertTrue(np.isclose(bindings._window_time, i * .1))
+            bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, np.random.rand(self.n_vertices), bindings._current_window_start + bindings._window_time + .1)
+            bindings.advance(.1)
+            self.assertTrue(np.isclose(bindings._window_time, (i+1) * .1))
+            self.assertTrue(np.isclose(bindings._current_window_start, 1.0))
+        bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, (i + 1) * np.ones(self.n_vertices), bindings._current_window_start + bindings._window_time + .1)
+        Interface.is_timestep_complete = MagicMock(return_value=True)
+        bindings.advance(.1)
+        self.assertTrue(np.isclose(bindings._current_window_start, 1.0))

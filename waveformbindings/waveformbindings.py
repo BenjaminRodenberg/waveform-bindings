@@ -181,6 +181,7 @@ class WaveformBindings(precice_future.Interface):
                                               self._current_window_start)
                 self._read_all_window_data_from_precice()  # this read buffer will be overwritten anyway. todo: initial guess is currently not treated properly!
                 self._print_window_status()
+                assert (self.is_timestep_complete())
 
             logging.debug("print read waveform")
             logging.debug(self._read_info["data_name"])
