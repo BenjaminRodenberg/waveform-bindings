@@ -136,8 +136,12 @@ class WaveformBindings(precice_future.Interface):
                                                                                        time=substep_time))
             read_waveform.append(read_data, substep_time)
 
+    def is_timestep_complete(self):
+        return self._timestep_is_complete
+
     def advance(self, dt):
         self._window_time += dt
+        self._timestep_is_complete = False
 
         if self._window_is_completed():
             logging.debug("Window is complete.")
@@ -157,7 +161,9 @@ class WaveformBindings(precice_future.Interface):
                 self._rollback_write_data_buffer()
                 self._window_time = 0
                 self._read_all_window_data_from_precice()
-            else:  # window is finished
+
+            if super().is_timestep_complete():  # window is finished
+                assert (not self.reading_checkpoint_is_required())
                 logging.info("Next window.")
                 # go to next window
                 read_data_init = read_data_last
@@ -181,7 +187,7 @@ class WaveformBindings(precice_future.Interface):
                                               self._current_window_start)
                 self._read_all_window_data_from_precice()  # this read buffer will be overwritten anyway. todo: initial guess is currently not treated properly!
                 self._print_window_status()
-                assert (self.is_timestep_complete())
+                self._timestep_is_complete = True
 
             logging.debug("print read waveform")
             logging.debug(self._read_info["data_name"])

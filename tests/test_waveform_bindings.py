@@ -171,6 +171,13 @@ class TestWaveformBindings(TestCase):
         self.assertEqual(bindings._current_window_start, self.dt)
 
     def test_do_some_steps(self):
+        """
+        Performs two complete coupling iterations. The coupling window has a size of 1, while the timestep size is 0.1.
+        Therefore we have to perform 10 steps in order to complete the window. The test is designed in such a way that
+        in the first coupling iteration a checkpoint has to be read and the window has to be repeated. In the second
+        iteration, the coupling is successful and no checkpoint is read. Therefore, in the end of the test the window is
+        complete.
+        """
         from waveformbindings import WaveformBindings
         from precice_future import Interface, action_read_iteration_checkpoint, action_write_iteration_checkpoint
 
@@ -195,6 +202,8 @@ class TestWaveformBindings(TestCase):
         bindings._precice_tau = self.dt
         Interface.is_action_required = MagicMock(return_value=False)
         self.assertEqual(bindings._current_window_start, 0.0)
+
+        ## do 10 timesteps in first coupling iteration
         for i in range(9):
             self.assertTrue(np.isclose(bindings._window_time, i * .1))
             bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, (i + 1) * np.ones(self.n_vertices), bindings._window_time + .1)
@@ -202,10 +211,9 @@ class TestWaveformBindings(TestCase):
             self.assertTrue(np.isclose(bindings._window_time, (i+1) * .1))
             self.assertTrue(np.isclose(bindings._current_window_start, 0.0))
         bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, (i + 1) * np.ones(self.n_vertices), bindings._window_time + .1)
-        Interface.is_timestep_complete = MagicMock(return_value=True)
-        bindings.advance(.1)
-        self.assertTrue(np.isclose(bindings._current_window_start, 1.0))
 
+        # mock steering methods, such that window is repeated: read checkpoint and return False for is_timestep_complete
+        Interface.is_timestep_complete = MagicMock(return_value=False)
         def is_action_required_behavior(py_action):
             if py_action == action_read_iteration_checkpoint():
                 return True
@@ -213,13 +221,29 @@ class TestWaveformBindings(TestCase):
                 return False
         Interface.is_action_required = MagicMock(side_effect=is_action_required_behavior)
         Interface.is_timestep_complete = MagicMock(return_value=False)
+
+        bindings.advance(.1)  # window is repeated
+
+        self.assertTrue(np.isclose(bindings._current_window_start, 0.0))
+
+        # do 10 timesteps in second coupling iteration
         for i in range(9):
             self.assertTrue(np.isclose(bindings._window_time, i * .1))
             bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, np.random.rand(self.n_vertices), bindings._current_window_start + bindings._window_time + .1)
             bindings.advance(.1)
             self.assertTrue(np.isclose(bindings._window_time, (i+1) * .1))
-            self.assertTrue(np.isclose(bindings._current_window_start, 1.0))
+            self.assertTrue(np.isclose(bindings._current_window_start, 0.0))
         bindings.write_block_scalar_data("Dummy-Write", dummy_mesh_id, dummy_vertex_ids, (i + 1) * np.ones(self.n_vertices), bindings._current_window_start + bindings._window_time + .1)
+
+        # mock steering methods, such that window is complete: don't require reading checkpoint and return True for is_timestep_complete
+        def is_action_required_behavior(py_action):
+            if py_action == action_read_iteration_checkpoint():
+                return False
+            elif py_action == action_write_iteration_checkpoint():
+                return True
+        Interface.is_action_required = MagicMock(side_effect=is_action_required_behavior)
         Interface.is_timestep_complete = MagicMock(return_value=True)
-        bindings.advance(.1)
+
+        bindings.advance(.1)  # window is completed
+
         self.assertTrue(np.isclose(bindings._current_window_start, 1.0))
