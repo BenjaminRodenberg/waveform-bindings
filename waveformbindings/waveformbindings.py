@@ -381,11 +381,17 @@ class Waveform:
                     values_along_time[t] = self._samples_in_time[i, d, j]
                 else:
                     values_along_time[t] = self._samples_in_time[i, j]
-            if self._interpolation_strategy in ['linear', 'quadratic', 'cubic']:
-                interpolant = interp1d(list(values_along_time.keys()), list(values_along_time.values()), kind=self._interpolation_strategy)
+            if self._interpolation_strategy in ['linear']:
+                tck = splrep(list(values_along_time.keys()), list(values_along_time.values()), k=1)
+            elif self._interpolation_strategy in ['quadratic']:
+                tck = splrep(list(values_along_time.keys()), list(values_along_time.values()), k=2)              
+            elif self._interpolation_strategy in ['cubic']:
+                tck = splrep(list(values_along_time.keys()), list(values_along_time.values()), k=3)
             elif self._interpolation_strategy in ['quartic']:
                 tck = splrep(list(values_along_time.keys()), list(values_along_time.values()), k=4)
-                interpolant = lambda t: splev(t, tck)
+            
+            interpolant = lambda t: splev(t, tck)
+            
             try:
                 if self._data_dimension > 1:
                     return_value[i, d] = interpolant(time)
