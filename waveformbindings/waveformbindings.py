@@ -150,8 +150,12 @@ class WaveformBindings(precice_future.Interface):
             module_logger.debug(self._write_info["data_name"])
             self._write_data_buffer.print_waveform()
             self._write_all_window_data_to_precice()
-            read_data_last = self._read_data_buffer.sample(self._current_window_end()).copy()  # store last read data before advance, otherwise it might be lost if window is finished
             module_logger.debug("calling precice_future.advance")
+
+            try:
+                read_data_last = self._read_data_buffer.sample(self._current_window_end()).copy()  # store last read data before advance, otherwise it might be lost if window is finished
+            except NoDataError:  # if no read_data exists (directly after initialization), we do not have to store it. However, this is only true, if the window is not complete!
+                assert(not super().is_timestep_complete())
 
             write_data_last = self._write_data_buffer.sample(self._current_window_end()).copy()  # store last write data before advance, otherwise it might be lost if window is finished
             max_dt = super().advance(self._window_time)  # = time given by preCICE
@@ -247,9 +251,7 @@ class WaveformBindings(precice_future.Interface):
                         "writing_initial_data_is_required() instead.".format(action=action))
 
     def _is_action_required(self, action):
-        if action == action_write_initial_data():
-            return True  # if we use waveform relaxation, we require initial data for both participants to be able to fill the write buffers correctly
-        elif action == action_write_iteration_checkpoint() or action == action_read_iteration_checkpoint():
+        if action == action_write_iteration_checkpoint() or action == action_read_iteration_checkpoint() or action == action_write_initial_data():
             return super().is_action_required(action)
         else:
             raise Exception("unexpected action. %s", str(action))
@@ -280,6 +282,12 @@ class WaveformBindings(precice_future.Interface):
             self._write_all_window_data_to_precice()
             self._rollback_write_data_buffer()
             super().fulfilled_action(action_write_initial_data())
+        else:
+            for substep in range(0, self._n_this + 1):
+                time = substep * self._precice_tau / self._n_this
+                module_logger.debug("initialize with: {data} @ time = {time}".format(time=time, data=write_zero))
+                self._write_data_buffer.append(write_zero, time)
+            self._rollback_write_data_buffer()
 
         return_value = super().initialize_data()
 
